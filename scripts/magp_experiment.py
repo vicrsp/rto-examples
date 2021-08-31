@@ -3,7 +3,7 @@ import multiprocessing
 import yaml
 
 from rto.rto import RTO
-from rto.optimization.optimizer import ModelBasedOptimizer
+from rto.optimization.optimizer import ModifierAdaptationOptimizer
 from rto.adaptation.ma_gaussian_processes import MAGaussianProcesses
 from rto.models.semi_batch import SemiBatchReactor
 from rto.utils import generate_samples_uniform
@@ -26,7 +26,7 @@ def run_rto(n_experiments, data_array, solver, db_file, neighbors, exp_name, noi
         print('{} experiment {}'.format(exp_name, i))
         initial_data = data_array[i]
         # build the model-based optimization problem
-        opt_problem = ModelBasedOptimizer(
+        opt_problem = ModifierAdaptationOptimizer(
             x_ub, x_lb, g_plant, solver=solver, backoff=backoff)
 
         # build the adaptation model

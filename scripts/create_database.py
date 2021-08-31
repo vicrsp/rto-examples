@@ -28,6 +28,8 @@ if __name__ == '__main__':
             db_name = arg
         elif opt == '-m':
             try:
+                if os.path.exists(MEMORY_DATABASE):
+                    os.remove(MEMORY_DATABASE)
                 create_rto_db(MEMORY_DATABASE)
                 print(f'Created memory database succesfully')
                 sys.exit()
