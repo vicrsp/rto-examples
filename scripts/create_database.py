@@ -43,6 +43,8 @@ if __name__ == '__main__':
     db_path = f'{folder_name}/{db_name}.db'
     print(f'Creating database to {db_path}')
     try:
+        if os.path.exists(db_path):
+            os.remove(db_path)
         touch(db_path)
         create_rto_db(db_path)
     except Exception as e:
