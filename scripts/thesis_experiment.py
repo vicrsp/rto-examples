@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import logging
 from sklearn.utils import Bunch
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 from create_database import create_database
 from rto.models.semi_batch import SemiBatchReactor
@@ -22,10 +22,8 @@ from rto.adaptation.ma_gaussian_processes import MAGaussianProcesses
 from rto.utils import generate_samples_uniform
 
 # backup script
-## 05: inclusão do NM simplex na comparação e amostrando proximo do otimo do modelo
-## 06: inclusão do NM simplex na comparação e amostrando proximo do ponto inicial do artigo
-## 07: 06 + retirando restarts do treino do modelo GP
-DATABASE = "/mnt/d/rto_data/final-results-rap.db"
+
+DATABASE = "/mnt/d/rto_data/thesis-analysis-06.db"
 create_database(DATABASE)
 
 # %%
@@ -65,20 +63,21 @@ u, y, measurements = generate_samples_uniform(model, plant, g, u_0, initial_data
 initial_data = Bunch(u=u, y=y, measurements=measurements)
 u_0_feas = u[-1]
 
-
 # %%
-# create the adaptation strategy
-adaptation_de = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
-adaptation_sqp = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
-# create the optmizer instances
-optimizer_ma_de = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'de'}, backoff=0.0)
-optimizer_ma_sqp = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'sqp'}, backoff=0.0)
+def run_rto_magp_de_sqp(model, plant, initial_data, iterations, u_0_feas, g, ubx, lbx, db_file, name):
+    # create the adaptation strategy
+    adaptation_de = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
+    adaptation_sqp = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
+    # create the optmizer instances
+    optimizer_ma_de = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'de'}, backoff=0.0)
+    optimizer_ma_sqp = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'sqp'}, backoff=0.0)
 
-rto_ma_sqp = RTO(model, plant, optimizer_ma_sqp, adaptation_sqp, iterations, db_file=DATABASE, name='MA-GP-SQP', noise=0.0)
-rto_ma_de = RTO(model, plant, optimizer_ma_de, adaptation_de, iterations, db_file=DATABASE, name='MA-GP-DE', noise=0.0)
+    rto_ma_sqp = RTO(model, plant, optimizer_ma_sqp, adaptation_sqp, iterations, db_file=db_file, name=f'MA-GP-SQP', noise=None)
+    rto_ma_de = RTO(model, plant, optimizer_ma_de, adaptation_de, iterations, db_file=db_file, name='MA-GP-DE', noise=None)
 
-rto_ma_sqp.run(u_0_feas)
-rto_ma_de.run(u_0_feas)
+    rto_ma_sqp.run(u_0_feas)
+    rto_ma_de.run(u_0_feas)
+
 
 # %% [markdown]
 # ### Effect of Noise
@@ -86,18 +85,20 @@ rto_ma_de.run(u_0_feas)
 # The results above are for the scenario where we have no noise in the plant measuremets. Since this is not the reality, an interesting test is to check how it can impact the RTO performance. For that, we consider a 0.01 additive gaussian noise, but using the same parameters as the previous system.
 
 # %%
-# noise = 0.01
-# repetitions = 10
+def run_rto_magp_de_sqp_multiple(model, plant, repetitions, initial_data, iterations, u_0_feas, g, ubx, lbx, db_file, name, noise=None):
+    # create the optmizer instances
+    optimizer_ma_de = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'de'}, backoff=0.0)
+    optimizer_ma_sqp = ModifierAdaptationOptimizer(ub=ubx, lb=lbx, g=g, solver={'name': 'sqp'}, backoff=0.0)
 
-# adaptation_de_noise = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
-# adaptation_sqp_noise = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
+    adaptation_de_noise = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
+    adaptation_sqp_noise = MAGaussianProcesses(model, initial_data, ub=ubx, lb=lbx, filter_data=True, neighbors_type='k_last')
 
-# rto_ma_sqp_noise = RTO(model, plant, optimizer_ma_sqp, adaptation_sqp_noise, iterations, db_file=DATABASE, name='MA-GP-SQP+noise', noise=noise)
-# rto_ma_de_noise = RTO(model, plant, optimizer_ma_de, adaptation_de_noise, iterations, db_file=DATABASE, name='MA-GP-DE+noise', noise=noise)
+    rto_ma_sqp_noise = RTO(model, plant, optimizer_ma_sqp, adaptation_sqp_noise, iterations, db_file=DATABASE, name='MA-GP-SQP+noise', noise=noise)
+    rto_ma_de_noise = RTO(model, plant, optimizer_ma_de, adaptation_de_noise, iterations, db_file=DATABASE, name='MA-GP-DE+noise', noise=noise)
 
-# for i in range(repetitions):
-#     rto_ma_sqp_noise.run(u_0_feas)
-#     rto_ma_de_noise.run(u_0_feas)
+    for _ in range(repetitions):
+        rto_ma_sqp_noise.run(u_0_feas)
+        rto_ma_de_noise.run(u_0_feas)
 
 # %% [markdown]
 # ### Using different initial data points
@@ -105,8 +106,7 @@ rto_ma_de.run(u_0_feas)
 # %%
 # sample some initial data
 # generate all the data before
-n_datasets = 30
-noise = 0.01
+n_datasets = 10
 datasets = []
 for i in range(n_datasets):
     u_i, y_i, measurements_i = generate_samples_uniform(model, plant, g, u_0, initial_data_size, noise=noise)
